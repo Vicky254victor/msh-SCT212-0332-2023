@@ -37,11 +37,17 @@ static void run_external(char **argv) {
         _exit(127);
     }
 
-    int status;                         /* PARENT */
+       int status;                         /* PARENT */
     if (waitpid(pid, &status, 0) < 0) {
         perror("waitpid");
         last_status = 1;
+        return;
     }
+
+    if (WIFEXITED(status))              /* finished normally */
+        last_status = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status))       /* killed by a signal */
+        last_status = 128 + WTERMSIG(status);
 }
 int main(void) {
     char *line = NULL;   /* getline will allocate this memory for us */
