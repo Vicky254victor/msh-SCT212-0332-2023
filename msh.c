@@ -23,7 +23,8 @@ static int parse(char *line, char **argv) {
     return argc;
 }
 /* Task 3: run an external program in a child process */
-static void run_external(char **argv) {
+
+static void run_external(char **argv, int background) {
     pid_t pid = fork();
     if (pid < 0) {                      /* fork failed */
         perror("fork");
@@ -32,11 +33,15 @@ static void run_external(char **argv) {
     }
 
     if (pid == 0) {                     /* CHILD */
+                if (background) setpgid(0, 0);  /* own group, so Ctrl-C won't hit it */
         execvp(argv[0], argv);
         perror(argv[0]);                /* only reached if exec FAILED */
         _exit(127);
     }
-
+    if (background) {                   /* PARENT, background job: don't wait */
+        printf("[bg] started pid %d\n", pid);
+        return;
+    }
        int status;                         /* PARENT */
     if (waitpid(pid, &status, 0) < 0) {
         perror("waitpid");
@@ -72,11 +77,18 @@ static void builtin_help(void) {
     printf("Built-ins: cd [dir], help, exit\n");
     last_status = 0;
 }
+/* Task 6: collect finished background children so no zombies remain */
+static void reap_background(void) {
+    int st;
+    pid_t p;
+    while ((p = waitpid(-1, &st, WNOHANG)) > 0)
+        printf("[bg] pid %d finished\n", p);
+}
 int main(void) {
     char *line = NULL;   /* getline will allocate this memory for us */
     size_t cap = 0;      /* getline keeps track of how big it is */
     char *argv[MAX_ARGS];
-    for (;;) {
+    for (;;) {        reap_background();
         printf("msh[%d]> ", last_status);
         fflush(stdout);  /* make the prompt appear right now */
 
@@ -97,7 +109,14 @@ int main(void) {
             builtin_help();
             continue;
         }
-        run_external(argv);
+                int background = 0;
+        if (strcmp(argv[argc - 1], "&") == 0) {   /* trailing & ? */
+            argv[--argc] = NULL;                  /* remove the & from argv */
+            background = 1;
+            if (argc == 0) continue;              /* a lone & does nothing */
+        }
+
+        run_external(argv, background);
     }
 
     free(line);          /* give the memory back: no leaks */
