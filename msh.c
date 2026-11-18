@@ -24,7 +24,7 @@ static int parse(char *line, char **argv) {
 }
 /* Task 3: run an external program in a child process */
 
-static void run_external(char **argv, int background) {
+static void run_external(char **argv, int background, const char *outfile){ 
     pid_t pid = fork();
     if (pid < 0) {                      /* fork failed */
         perror("fork");
@@ -34,7 +34,19 @@ static void run_external(char **argv, int background) {
 
     if (pid == 0) {                     /* CHILD */
                 if (background) setpgid(0, 0);  /* own group, so Ctrl-C won't hit it */
-        execvp(argv[0], argv);
+        if (outfile != NULL) {          /* Task 7: send output to a file */
+            int fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0) {
+                perror(outfile);
+                _exit(1);
+            }
+            if (dup2(fd, STDOUT_FILENO) < 0) {
+                perror("dup2");
+                _exit(1);
+            }
+            close(fd);
+        }       
+ execvp(argv[0], argv);
         perror(argv[0]);                /* only reached if exec FAILED */
         _exit(127);
     }
@@ -116,7 +128,26 @@ int main(void) {
             if (argc == 0) continue;              /* a lone & does nothing */
         }
 
-        run_external(argv, background);
+                const char *outfile = NULL;               /* Task 7: look for > */
+        int bad = 0;
+        for (int i = 0; i < argc; i++) {
+            if (strcmp(argv[i], ">") == 0) {
+                if (i == 0 || i + 1 >= argc) {    /* nothing before or after > */
+                    fprintf(stderr, "msh: syntax error near >\n");
+                    bad = 1;
+                } else {
+                    outfile = argv[i + 1];        /* the file name */
+                    argv[i] = NULL;               /* the command ends before > */
+                }
+                break;
+            }
+        }
+        if (bad) {
+            last_status = 1;
+            continue;
+        }
+
+        run_external(argv, background, outfile);
     }
 
     free(line);          /* give the memory back: no leaks */
