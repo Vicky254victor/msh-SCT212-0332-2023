@@ -22,6 +22,27 @@ static int parse(char *line, char **argv) {
     argv[argc] = NULL;      /* argv must end with NULL */
     return argc;
 }
+/* Task 3: run an external program in a child process */
+static void run_external(char **argv) {
+    pid_t pid = fork();
+    if (pid < 0) {                      /* fork failed */
+        perror("fork");
+        last_status = 1;
+        return;
+    }
+
+    if (pid == 0) {                     /* CHILD */
+        execvp(argv[0], argv);
+        perror(argv[0]);                /* only reached if exec FAILED */
+        _exit(127);
+    }
+
+    int status;                         /* PARENT */
+    if (waitpid(pid, &status, 0) < 0) {
+        perror("waitpid");
+        last_status = 1;
+    }
+}
 int main(void) {
     char *line = NULL;   /* getline will allocate this memory for us */
     size_t cap = 0;      /* getline keeps track of how big it is */
@@ -38,8 +59,7 @@ int main(void) {
                 int argc = parse(line, argv);
         if (argc == 0) continue;         /* blank line: just show a new prompt */
 
-        for (int i = 0; i < argc; i++)   /* temporary, just for testing */
-            printf("arg %d = %s\n", i, argv[i]);
+        run_external(argv);
     }
 
     free(line);          /* give the memory back: no leaks */
