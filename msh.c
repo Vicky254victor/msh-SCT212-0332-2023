@@ -96,7 +96,19 @@ static void reap_background(void) {
     while ((p = waitpid(-1, &st, WNOHANG)) > 0)
         printf("[bg] pid %d finished\n", p);
 }
+/* Task 8: Ctrl-C must not kill the shell, so we catch SIGINT and just print a newline */
+static void on_sigint(int sig) {
+    (void)sig;
+    ssize_t r = write(STDOUT_FILENO, "\n", 1);
+    (void)r;
+}
 int main(void) {
+    struct sigaction sa;                    /* Task 8: catch Ctrl-C */
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = on_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGINT, &sa, NULL);
     char *line = NULL;   /* getline will allocate this memory for us */
     size_t cap = 0;      /* getline keeps track of how big it is */
     char *argv[MAX_ARGS];
